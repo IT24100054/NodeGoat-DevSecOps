@@ -1,92 +1,89 @@
-```javascript
-const ContributionsDAO = require("../data/contributions-dao").ContributionsDAO;
-const {
-    environmentalScripts
-} = require("../../config/config");
+name: Security Pipeline
 
-/* The ContributionsHandler must be constructed with a connected db */
-function ContributionsHandler(db) {
-    "use strict";
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
-    const contributionsDAO = new ContributionsDAO(db);
+permissions:
+  contents: read
 
-    this.displayContributions = (req, res, next) => {
-        const {
-            userId
-        } = req.session;
+jobs:
 
-        contributionsDAO.getByUserId(userId, (error, contrib) => {
-            if (error) return next(error);
+  semgrep:
+    name: SAST - Semgrep
+    runs-on: ubuntu-latest
+    continue-on-error: true
 
-            contrib.userId = userId; // set for nav menu items
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            return res.render("contributions", {
-                ...contrib,
-                environmentalScripts
-            });
-        });
-    };
+      - name: Run Semgrep
+        uses: semgrep/semgrep-action@v1
+        continue-on-error: true
+        with:
+          config: >-
+            p/javascript
+            p/security-audit
 
-    this.handleContributionsUpdate = (req, res, next) => {
+  npm-audit:
+    name: SCA - npm Audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
 
-        // Securely convert user input to numbers.
-        // Do not use eval() because it can execute attacker-controlled JavaScript.
-        const preTax = Number(req.body.preTax);
-        const afterTax = Number(req.body.afterTax);
-        const roth = Number(req.body.roth);
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-        const {
-            userId
-        } = req.session;
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-        // Validate contribution values
-        const validations = [
-            !Number.isFinite(preTax),
-            !Number.isFinite(afterTax),
-            !Number.isFinite(roth),
-            preTax < 0,
-            afterTax < 0,
-            roth < 0
-        ];
+      - name: Install dependencies
+        run: npm ci
 
-        const isInvalid = validations.some(validation => validation);
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
 
-        if (isInvalid) {
-            return res.render("contributions", {
-                updateError: "Invalid contribution percentages",
-                userId,
-                environmentalScripts
-            });
-        }
+  gitleaks:
+    name: Secret Scanning - Gitleaks
+    runs-on: ubuntu-latest
 
-        // Prevent more than 30% total contributions
-        if (preTax + afterTax + roth > 30) {
-            return res.render("contributions", {
-                updateError: "Contribution percentages cannot exceed 30 %",
-                userId,
-                environmentalScripts
-            });
-        }
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-        contributionsDAO.update(
-            userId,
-            preTax,
-            afterTax,
-            roth,
-            (err, contributions) => {
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-                if (err) return next(err);
+  trivy:
+    name: Container Security - Trivy
+    runs-on: ubuntu-latest
+    continue-on-error: true
 
-                contributions.updateSuccess = true;
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-                return res.render("contributions", {
-                    ...contributions,
-                    environmentalScripts
-                });
-            }
-        );
-    };
-}
+      - name: Build Docker image
+        run: docker build -t nodegoat:security .
 
-module.exports = ContributionsHandler;
-```
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          image-ref: nodegoat:security
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+          ignore-unfixed: true
