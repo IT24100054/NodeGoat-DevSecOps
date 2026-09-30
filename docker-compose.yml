@@ -1,5 +1,3 @@
-version: "3.7"
-
 services:
   web:
     build: .
@@ -9,9 +7,16 @@ services:
     command: sh -c "until nc -z -w 2 mongo 27017 && echo 'mongo is ready for connections' && node artifacts/db-reset.js && npm start; do sleep 2; done"
     ports:
       - "4000:4000"
+    depends_on:
+      - mongo
 
   mongo:
     image: mongo:4.4
     user: mongodb
     expose:
-      - 27017
+      - "27017"
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
