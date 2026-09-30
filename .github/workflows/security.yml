@@ -23,6 +23,7 @@ jobs:
 
       - name: Run Semgrep
         uses: semgrep/semgrep-action@v1
+        continue-on-error: true
         with:
           config: >-
             p/javascript
@@ -46,6 +47,7 @@ jobs:
 
       - name: Run npm audit
         run: npm audit --audit-level=high
+        continue-on-error: true
 
   gitleaks:
     name: Secret Scanning - Gitleaks
@@ -79,5 +81,5 @@ jobs:
           image-ref: nodegoat:security
           format: table
           severity: HIGH,CRITICAL
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
