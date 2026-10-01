@@ -40,9 +40,7 @@ function SessionHandler(db) {
                 req.session.userId,
                 (err, user) => {
 
-                    return user && user.isAdmin
-                        ? next()
-                        : res.redirect("/login");
+                    return user && user.isAdmin ? next() : res.redirect("/login");
                 }
             );
         }
@@ -135,11 +133,7 @@ function SessionHandler(db) {
 
                     req.session.userId = user._id;
 
-                    return res.redirect(
-                        user.isAdmin
-                            ? "/benefits"
-                            : "/dashboard"
-                    );
+                    return res.redirect(user.isAdmin ? "/benefits" : "/dashboard");
                 });
             }
         );
