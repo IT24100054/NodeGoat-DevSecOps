@@ -1,89 +1,38 @@
-name: Security Pipeline
+var ContributionsDAO = require("../data/contributions-dao").ContributionsDAO;
 
-on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
+/* The ContributionsHandler must be constructed with a connected db */
+function ContributionsHandler(db) {
+    "use strict";
 
-permissions:
-  contents: read
+    var contributionsDAO = new ContributionsDAO(db);
 
-jobs:
+    this.displayContributions = function(req, res, next) {
+        var userId = req.session.userId;
 
-  semgrep:
-    name: SAST - Semgrep
-    runs-on: ubuntu-latest
-    continue-on-error: true
+        contributionsDAO.getByUserId(userId, function(error, contrib) {
+            if (error) return next(error);
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+            return res.render("contributions", contrib);
+        });
+    };
 
-      - name: Run Semgrep
-        uses: semgrep/semgrep-action@v1
-        continue-on-error: true
-        with:
-          config: >-
-            p/javascript
-            p/security-audit
+    this.handleContributionsUpdate = function(req, res, next) {
+        /*jslint evil: true */
+        var preTax, afterTax, roth;
+        var userId = req.session.userId;
 
-  npm-audit:
-    name: SCA - npm Audit
-    runs-on: ubuntu-latest
-    continue-on-error: true
+        // Insecure: Using eval to calculate percentages or values directly
+        preTax = eval(req.body.preTax);
+        afterTax = eval(req.body.afterTax);
+        roth = eval(req.body.roth);
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+        contributionsDAO.update(userId, preTax, afterTax, roth, function(err, user) {
+            if (err) return next(err);
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+            user.updateSuccess = true;
+            return res.render("contributions", user);
+        });
+    };
+}
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run npm audit
-        run: npm audit --audit-level=high
-        continue-on-error: true
-
-  gitleaks:
-    name: Secret Scanning - Gitleaks
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  trivy:
-    name: Container Security - Trivy
-    runs-on: ubuntu-latest
-    continue-on-error: true
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build Docker image
-        run: docker build -t nodegoat:security .
-
-      - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          image-ref: nodegoat:security
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: '0'
-          ignore-unfixed: true
+module.exports = ContributionsHandler;
