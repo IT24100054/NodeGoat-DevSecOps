@@ -1,6 +1,4 @@
-```yaml
 name: E2E Test
-
 on: [push, pull_request]
 
 jobs:
@@ -14,7 +12,7 @@ jobs:
         node-version: ["10.x", "12.x", "14.x"]
 
     steps:
-      - name: Checkout repository
+      - name: Checkout https://github.com/${{ github.repository }}@${{ github.ref }}
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -61,4 +59,3 @@ jobs:
         with:
           name: cypress-artifacts-node${{ matrix.node-version }}
           path: test/e2e/screenshots
-```
