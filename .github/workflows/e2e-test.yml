@@ -40,6 +40,9 @@ jobs:
           docker run -d -p 27017:27017 mongo:4.0
           timeout 60s bash -c 'until nc -z -w 2 localhost 27017 && echo MongoDB ready; do sleep 2; done'
 
+      - name: Seed test database
+        run: npm run db:seed
+
       - name: Run E2E test suite
         id: test-suite
         run: |
