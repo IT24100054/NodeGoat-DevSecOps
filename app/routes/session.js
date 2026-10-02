@@ -1,86 +1,98 @@
-var UserDAO = require("../data/user-dao").UserDAO;
-var AllocationsDAO = require("../data/allocations-dao").AllocationsDAO;
+const UserDAO = require("../data/user-dao").UserDAO;
+const AllocationsDAO = require("../data/allocations-dao").AllocationsDAO;
+const {
+    environmentalScripts
+} = require("../../config/config");
 
 /* The SessionHandler must be constructed with a connected db */
 function SessionHandler(db) {
     "use strict";
 
-    var userDAO = new UserDAO(db);
-    var allocationsDAO = new AllocationsDAO(db);
+    const userDAO = new UserDAO(db);
+    const allocationsDAO = new AllocationsDAO(db);
 
-    var prepareUserData = function(user, next) {
-        // Generate allocations data
-        allocationsDAO.getByUserId(user._id, function(err, allocations) {
+    const prepareUserData = (user, next) => {
+        // Generate random allocations
+        const stocks = Math.floor((Math.random() * 40) + 1);
+        const funds = Math.floor((Math.random() * 40) + 1);
+        const bonds = 100 - (stocks + funds);
+
+        allocationsDAO.update(user._id, stocks, funds, bonds, (err) => {
             if (err) return next(err);
-            user.allocations = allocations;
-            next(null, user);
         });
     };
 
-    this.isAdminUserMiddleware = function(req, res, next) {
+    this.isAdminUserMiddleware = (req, res, next) => {
         if (req.session.userId) {
-            return userDAO.getUserById(req.session.userId, function(err, user) {
-                if (user && user.isAdmin) {
-                    return next();
-                }
-                return res.redirect("/login");
+            return userDAO.getUserById(req.session.userId, (err, user) => {
+                return user && user.isAdmin ? next() : res.redirect("/login");
             });
         }
+        console.log("redirecting to login");
         return res.redirect("/login");
     };
 
-    this.isLoggedInMiddleware = function(req, res, next) {
+    this.isLoggedInMiddleware = (req, res, next) => {
         if (req.session.userId) {
             return next();
         }
+        console.log("redirecting to login");
         return res.redirect("/login");
     };
 
-    this.displayLoginPage = function(req, res, next) {
+    this.displayLoginPage = (req, res) => {
         return res.render("login", {
             userName: "",
             password: "",
-            loginError: ""
+            loginError: "",
+            environmentalScripts
         });
     };
 
-    this.handleLoginRequest = function(req, res, next) {
-        var userName = req.body.userName;
-        var password = req.body.password;
+    this.handleLoginRequest = (req, res, next) => {
+        const { userName, password } = req.body;
 
-        userDAO.validateLogin(userName, password, function(err, user) {
-            var errorMessage = "Invalid username and/or password";
+        userDAO.validateLogin(userName, password, (err, user) => {
+            const errorMessage = "Invalid username and/or password";
 
             if (err) {
                 if (err.noSuchUser) {
+                    // T4: strip all CR/LF so log lines cannot be forged
+                    const safeName = String(userName).replace(/[\r\n]+/g, "_");
+                    console.log("Error: attempt to login with invalid user: ", safeName);
+
                     return res.render("login", {
-                        userName: userName,
+                        userName,
                         password: "",
-                        loginError: errorMessage
+                        loginError: errorMessage,
+                        environmentalScripts
                     });
                 } else if (err.invalidPassword) {
                     return res.render("login", {
-                        userName: userName,
+                        userName,
                         password: "",
-                        loginError: errorMessage
+                        loginError: errorMessage,
+                        environmentalScripts
                     });
-                } else {
-                    return next(err);
                 }
+                return next(err);
             }
 
-            req.session.userId = user._id;
-            return res.redirect(user.isAdmin ? "/benefits" : "/dashboard");
+            // T1: regenerate the session ID on login to prevent fixation
+            req.session.regenerate((regenErr) => {
+                if (regenErr) return next(regenErr);
+
+                req.session.userId = user._id;
+                return res.redirect(user.isAdmin ? "/benefits" : "/dashboard");
+            });
         });
     };
 
-    this.displayLogoutPage = function(req, res, next) {
-        req.session.destroy(function() {
-            res.redirect("/");
-        });
+    this.displayLogoutPage = (req, res) => {
+        req.session.destroy(() => res.redirect("/"));
     };
 
-    this.displaySignupPage = function(req, res, next) {
+    this.displaySignupPage = (req, res) => {
         res.render("signup", {
             userName: "",
             password: "",
@@ -88,84 +100,110 @@ function SessionHandler(db) {
             email: "",
             userNameError: "",
             emailError: "",
-            verifyError: ""
+            verifyError: "",
+            environmentalScripts
         });
     };
 
-    function validateSignup(username, password, verify, email, errors) {
-        var USER_RE = /^[a-zA-Z0-9_-]{3,20}$/;
-        var PASS_RE = /^.{3,20}$/;
-        var EMAIL_RE = /^[\S]+@[\S]+\.[\S]+$/;
+    const validateSignup = (userName, firstName, lastName, password, verify, email, errors) => {
+        const USER_RE = /^.{1,20}$/;
+        const FNAME_RE = /^.{1,100}$/;
+        const LNAME_RE = /^.{1,100}$/;
+        const EMAIL_RE = /^[\S]+@[\S]+\.[\S]+$/;
+        const PASS_RE = /^.{1,20}$/;
 
         errors.userNameError = "";
+        errors.firstNameError = "";
+        errors.lastNameError = "";
         errors.passwordError = "";
         errors.verifyError = "";
         errors.emailError = "";
 
-        if (!USER_RE.test(username)) {
-            errors.userNameError = "invalid username.";
+        if (!USER_RE.test(userName)) {
+            errors.userNameError = "Invalid user name.";
+            return false;
+        }
+        if (!FNAME_RE.test(firstName)) {
+            errors.firstNameError = "Invalid first name.";
+            return false;
+        }
+        if (!LNAME_RE.test(lastName)) {
+            errors.lastNameError = "Invalid last name.";
             return false;
         }
         if (!PASS_RE.test(password)) {
-            errors.passwordError = "invalid password.";
+            errors.passwordError = "Password must be 8 to 18 characters including numbers, lowercase and uppercase letters.";
             return false;
         }
         if (password !== verify) {
-            errors.verifyError = "password must match";
+            errors.verifyError = "Password must match";
             return false;
         }
         if (email !== "") {
             if (!EMAIL_RE.test(email)) {
-                errors.emailError = "invalid email address";
+                errors.emailError = "Invalid email address";
                 return false;
             }
         }
         return true;
-    }
+    };
 
-    this.handleSignup = function(req, res, next) {
-        var email = req.body.email;
-        var userName = req.body.userName;
-        var password = req.body.password;
-        var verify = req.body.verify;
+    this.handleSignup = (req, res, next) => {
+        const { email, userName, firstName, lastName, password, verify } = req.body;
 
-        var errors = {
-            userName: userName,
-            email: email
+        // set these up in case we have an error case
+        const errors = {
+            "userName": userName,
+            "email": email
         };
 
-        if (validateSignup(userName, password, verify, email, errors)) {
-            userDAO.getUserByUserName(userName, function(err, user) {
+        if (validateSignup(userName, firstName, lastName, password, verify, email, errors)) {
+            userDAO.getUserByUserName(userName, (err, user) => {
                 if (err) return next(err);
 
                 if (user) {
                     errors.userNameError = "User name already in use. Please choose another";
-                    return res.render("signup", errors);
+                    return res.render("signup", { ...errors, environmentalScripts });
                 }
 
-                userDAO.addUser(userName, password, email, function(err, user) {
+                userDAO.addUser(userName, firstName, lastName, password, email, (err, user) => {
                     if (err) return next(err);
 
-                    // Fix session fixation
-                    req.session.regenerate(function() {
+                    // prepare data for the user
+                    prepareUserData(user, next);
+
+                    // T1: new session ID on signup as well
+                    req.session.regenerate((regenErr) => {
+                        if (regenErr) return next(regenErr);
+
                         req.session.userId = user._id;
-                        res.redirect("/dashboard");
+                        // Set userId property. Required for left nav menu links
+                        user.userId = user._id;
+
+                        return res.render("dashboard", { ...user, environmentalScripts });
                     });
                 });
             });
         } else {
             console.log("user did not validate");
-            return res.render("signup", errors);
+            return res.render("signup", { ...errors, environmentalScripts });
         }
     };
 
-    this.displayWelcomePage = function(req, res, next) {
-        var userId = req.session.userId;
+    this.displayWelcomePage = (req, res, next) => {
+        let userId;
 
-        userDAO.getUserById(userId, function(err, doc) {
+        if (req.session.userId) {
+            userId = req.session.userId;
+        } else {
+            console.log("welcome: Unable to identify user...redirecting to login");
+            return res.redirect("/login");
+        }
+
+        userDAO.getUserById(userId, (err, doc) => {
             if (err) return next(err);
             doc.userId = userId;
-            res.render("welcome", doc);
+            return res.render("dashboard", { ...doc, environmentalScripts });
         });
     };
 }

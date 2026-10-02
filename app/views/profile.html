@@ -73,9 +73,10 @@
                     <input type="hidden" name="_csrf" value="{{csrftoken}}" />
                     <button type="submit" class="btn btn-default" name="submit">Submit</button>
 
-                    <!-- @FIXME use a properly escaped variable that matches the URL context, for example
-                    refer to a firstNameSafeURLString field on the doc object set by the controller for this template -->
-                    <a href="{{firstNameSafeString}}">Google search this profile by name</a>
+                    <!-- Fix for var-in-href / XSS: the scheme and host are fixed, and the controller
+                    (profile.js) passes searchQuery, which is already encodeURIComponent()-encoded,
+                    so a user can never supply a javascript: URI. -->
+                    <a href="https://www.google.com/search?q={{searchQuery}}" rel="noopener noreferrer" target="_blank">Google search this profile by name</a>
                 </form>
             </div>
         </div>

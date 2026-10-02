@@ -8,8 +8,15 @@ const ResearchHandler = require("./research");
 const tutorialRouter = require("./tutorial");
 const ErrorHandler = require("./error").errorHandler;
 
-const index = (app, db) => {
+// Allow-list of hosts that /learn may redirect to (fix for open redirect)
+const ALLOWED_REDIRECT_HOSTS = new Set([
+    "www.khanacademy.org",
+    "khanacademy.org",
+    "owasp.org",
+    "www.owasp.org"
+]);
 
+const index = (app, db) => {
     "use strict";
 
     const sessionHandler = new SessionHandler(db);
@@ -23,7 +30,7 @@ const index = (app, db) => {
     // Middleware to check if a user is logged in
     const isLoggedIn = sessionHandler.isLoggedInMiddleware;
 
-    //Middleware to check if user has admin rights
+    // Middleware to check if user has admin rights
     const isAdmin = sessionHandler.isAdminUserMiddleware;
 
     // The main page of the app
@@ -54,7 +61,7 @@ const index = (app, db) => {
     // Benefits Page
     app.get("/benefits", isLoggedIn, benefitsHandler.displayBenefits);
     app.post("/benefits", isLoggedIn, benefitsHandler.updateBenefits);
-    /* Fix for A7 - checks user role to implement  Function Level Access Control
+    /* Fix for A7 - checks user role to implement Function Level Access Control
      app.get("/benefits", isLoggedIn, isAdmin, benefitsHandler.displayBenefits);
      app.post("/benefits", isLoggedIn, isAdmin, benefitsHandler.updateBenefits);
      */
@@ -66,10 +73,22 @@ const index = (app, db) => {
     app.get("/memos", isLoggedIn, memosHandler.displayMemos);
     app.post("/memos", isLoggedIn, memosHandler.addMemos);
 
-    // Handle redirect for learning resources link
+    // Handle redirect for learning resources link (allow-listed hosts only)
     app.get("/learn", isLoggedIn, (req, res) => {
-        // Insecure way to handle redirects by taking redirect url from query string
-        return res.redirect(req.query.url);
+        const rawUrl = req.query.url;
+
+        if (typeof rawUrl === "string") {
+            try {
+                const target = new URL(rawUrl);
+                if (target.protocol === "https:" && ALLOWED_REDIRECT_HOSTS.has(target.hostname)) {
+                    return res.redirect(target.href);
+                }
+            } catch (e) {
+                // malformed URL: fall through to the safe default
+            }
+        }
+
+        return res.redirect("/dashboard");
     });
 
     // Research Page

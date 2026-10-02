@@ -10,25 +10,19 @@ function ProfileHandler(db) {
 
     const profile = new ProfileDAO(db);
 
+    // Value for the "Google search this profile" link (URL-encoded, no scheme control)
+    const buildSearchQuery = (name) => encodeURIComponent(String(name || ""));
+
     this.displayProfile = (req, res, next) => {
-        const {
-            userId
-        } = req.session;
-
-
+        const { userId } = req.session;
 
         profile.getByUserId(parseInt(userId), (err, doc) => {
             if (err) return next(err);
-            doc.userId = userId;
 
-            // @TODO @FIXME
-            // while the developer intentions were correct in encoding the user supplied input so it
-            // doesn't end up as an XSS attack, the context is incorrect as it is encoding the firstname for HTML
-            // while this same variable is also used in the context of a URL link element
+            doc.userId = userId;
             doc.website = ESAPI.encoder().encodeForHTML(doc.website);
-            // fix it by replacing the above with another template variable that is used for 
-            // the context of a URL in a link header
-            // doc.website = ESAPI.encoder().encodeForURL(doc.website)
+            doc.firstNameSafeString = doc.firstName;
+            doc.searchQuery = buildSearchQuery(doc.firstName);
 
             return res.render("profile", {
                 ...doc,
@@ -38,7 +32,6 @@ function ProfileHandler(db) {
     };
 
     this.handleProfileUpdate = (req, res, next) => {
-
         const {
             firstName,
             lastName,
@@ -49,22 +42,21 @@ function ProfileHandler(db) {
             bankRouting
         } = req.body;
 
-        // Fix for Section: ReDoS attack
-        // The following regexPattern that is used to validate the bankRouting number is insecure and vulnerable to
-        // catastrophic backtracking which means that specific type of input may cause it to consume all CPU resources
-        // with an exponential time until it completes
-        // --
-        // The Fix: Instead of using greedy quantifiers the same regex will work if we omit the second quantifier +
-        // const regexPattern = /([0-9]+)\#/;
-        const regexPattern = /([0-9]+)+\#/;
-        // Allow only numbers with a suffix of the letter #, for example: 'XXXXXX#'
-        const testComplyWithRequirements = regexPattern.test(bankRouting);
-        // if the regex test fails we do not allow saving
+        const { userId } = req.session;
+
+        // T5 (ReDoS) fix: anchored, no nested quantifier, linear-time matching
+        const regexPattern = /^[0-9]+#$/;
+
+        // allow numbers with a suffix of the # character, for example: '123456#'
+        const testComplyWithRequirements = regexPattern.test(String(bankRouting));
+
         if (testComplyWithRequirements !== true) {
             const firstNameSafeString = firstName;
+
             return res.render("profile", {
                 updateError: "Bank Routing number does not comply with requirements for format specified",
                 firstNameSafeString,
+                searchQuery: buildSearchQuery(firstName),
                 lastName,
                 ssn,
                 dob,
@@ -74,10 +66,6 @@ function ProfileHandler(db) {
                 environmentalScripts
             });
         }
-
-        const {
-            userId
-        } = req.session;
 
         profile.updateUser(
             parseInt(userId),
@@ -89,23 +77,23 @@ function ProfileHandler(db) {
             bankAcc,
             bankRouting,
             (err, user) => {
-
                 if (err) return next(err);
 
-                // WARN: Applying any sting specific methods here w/o checking type of inputs could lead to DoS by HPP
-                //firstName = firstName.trim();
+                // WARNING: do not apply extra encoding here (it would be double-encoded in the view)
                 user.updateSuccess = true;
                 user.userId = userId;
 
+                const firstNameSafeString = user.firstName;
+
                 return res.render("profile", {
                     ...user,
+                    firstNameSafeString,
+                    searchQuery: buildSearchQuery(user.firstName),
                     environmentalScripts
                 });
             }
         );
-
     };
-
 }
 
 module.exports = ProfileHandler;
