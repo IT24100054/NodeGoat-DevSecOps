@@ -49,21 +49,17 @@ const tryDropCollection = (db, name) => {
 
 const parseResponse = (err, res, comm) => {
     if (err) {
-        console.log("ERROR:");
-        console.log(comm);
-        console.log(JSON.stringify(err));
+        console.error("Database operation failed:", comm);
         process.exit(1);
     }
-    console.log(comm);
-    console.log(JSON.stringify(res));
-};
 
+    console.log("Database operation completed:", comm);
+};
 
 // Starting here
 MongoClient.connect(db, (err, db) =>  {
     if (err) {
-        console.log("ERROR: connect");
-        console.log(JSON.stringify(err));
+        console.error("Database connection failed");
         process.exit(1);
     }
     console.log("Connected to the database");
@@ -95,16 +91,12 @@ MongoClient.connect(db, (err, db) =>  {
         });
 
         // insert admin and test users
-        console.log("Users to insert:");
-        USERS_TO_INSERT.forEach((user) => console.log(JSON.stringify(user)));
-
         usersCol.insertMany(USERS_TO_INSERT, (err, data) => {
             const finalAllocations = [];
 
             // We can't continue if error here
             if (err) {
-                console.log("ERROR: insertMany");
-                console.log(JSON.stringify(err));
+                console.error("Database operation failed: users.insertMany");
                 process.exit(1);
             }
             parseResponse(err, data, "users.insertMany");
@@ -120,10 +112,6 @@ MongoClient.connect(db, (err, db) =>  {
                     bonds: 100 - (stocks + funds)
                 });
             });
-
-            console.log("Allocations to insert:");
-            finalAllocations.forEach(allocation => console.log(JSON.stringify(allocation)));
-
             allocationsCol.insertMany(finalAllocations, (err, data) => {
                 parseResponse(err, data, "allocations.insertMany");
                 console.log("Database reset performed successfully");
