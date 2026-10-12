@@ -1,0 +1,10 @@
+title = "Gitleaks Blocking Gate Test"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "synthetic-gate-test"
+description = "Detect a harmless synthetic marker for CI gate testing"
+regex = '''GITLEAKS_GATE_TEST_[A-Z0-9]+'''
+keywords = ["GITLEAKS_GATE_TEST_"]
