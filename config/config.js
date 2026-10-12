@@ -9,7 +9,6 @@ const envConf = require(path.resolve(__dirname + "/../config/env/" + finalEnv.to
 
 const config = { ...allConf, ...envConf };
 
-console.log(`Current Config:`);
-console.log(util.inspect(config, false, null));
+
 
 module.exports = config;

@@ -29,6 +29,9 @@ function ProfileHandler(db) {
             // fix it by replacing the above with another template variable that is used for 
             // the context of a URL in a link header
             // doc.website = ESAPI.encoder().encodeForURL(doc.website)
+            doc.firstNameSafeURLString =
+                "https://www.google.com/search?q=" +
+                encodeURIComponent(String(doc.firstName || ""));
 
             return res.render("profile", {
                 ...doc,
@@ -55,16 +58,20 @@ function ProfileHandler(db) {
         // with an exponential time until it completes
         // --
         // The Fix: Instead of using greedy quantifiers the same regex will work if we omit the second quantifier +
-        // const regexPattern = /([0-9]+)\#/;
-        const regexPattern = /([0-9]+)+\#/;
+        const regexPattern = /^[0-9]+#$/;
         // Allow only numbers with a suffix of the letter #, for example: 'XXXXXX#'
         const testComplyWithRequirements = regexPattern.test(bankRouting);
         // if the regex test fails we do not allow saving
         if (testComplyWithRequirements !== true) {
             const firstNameSafeString = firstName;
+            const firstNameSafeURLString =
+                 "https://www.google.com/search?q=" +
+                 encodeURIComponent(String(firstName || ""));
+
             return res.render("profile", {
                 updateError: "Bank Routing number does not comply with requirements for format specified",
                 firstNameSafeString,
+                firstNameSafeURLString,
                 lastName,
                 ssn,
                 dob,
@@ -96,6 +103,10 @@ function ProfileHandler(db) {
                 //firstName = firstName.trim();
                 user.updateSuccess = true;
                 user.userId = userId;
+
+                user.firstNameSafeURLString =
+                    "https://www.google.com/search?q=" +
+                     encodeURIComponent(String(user.firstName || firstName || ""));
 
                 return res.render("profile", {
                     ...user,
