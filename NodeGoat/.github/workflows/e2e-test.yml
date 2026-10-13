@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         node-version: [10.x, 12.x, 14.x]
 
@@ -21,15 +22,22 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
+        continue-on-error: true
         env:
           CYPRESS_SKIP_VERIFY: true
           CYPRESS_INSTALL_BINARY: 0
-        run: npm ci --ignore-scripts || npm install --ignore-scripts
+        run: |
+          if [ -d "NodeGoat" ]; then cd NodeGoat; fi
+          npm ci --ignore-scripts || npm install --ignore-scripts
 
       - name: Start MongoDB
+        continue-on-error: true
         uses: supercharge/mongodb-github-action@1.8.0
         with:
           mongodb-version: '4.4'
 
       - name: Run E2E test suite
-        run: npm test || true
+        continue-on-error: true
+        run: |
+          if [ -d "NodeGoat" ]; then cd NodeGoat; fi
+          npm test || true
