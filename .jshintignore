@@ -1,2 +1,7 @@
-node_modules/
-app/assets/vendor/
+node_modules/**
+artifacts/**
+test/**
+cypress/**
+NodeGoat/test/**
+NodeGoat/cypress/**
+app/assets/**
